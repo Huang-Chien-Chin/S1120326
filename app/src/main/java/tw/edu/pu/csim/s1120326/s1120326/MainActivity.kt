@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
 @Composable
 fun Start(m:Modifier){
 
