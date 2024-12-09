@@ -9,13 +9,16 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CornerSize
@@ -24,24 +27,30 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tw.edu.pu.csim.s1120326.s1120326.ui.theme.S1120326Theme
+import kotlin.random.Random
 
 
 class MainActivity : ComponentActivity() {
@@ -75,9 +84,44 @@ fun Start(m: Modifier) {
 
     // 當前顏色索引
     var currentIndex by remember { mutableStateOf(0) }
-    // 防止快速重複滑動
     var isSwiping by remember { mutableStateOf(false) }
 
+    // 計時器
+    var timeElapsed by remember { mutableStateOf(0) }
+    var gameOver by remember { mutableStateOf(false) }
+
+    // 瑪利亞圖示位置
+    var mariaPosition by remember { mutableStateOf(0f) }
+
+    // 隨機瑪利亞圖示
+    var mariaImage by remember { mutableStateOf(R.drawable.maria0) }
+
+    // 分數
+    var score by remember { mutableStateOf(0) }
+
+    // 獲取螢幕配置和密度
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp // 螢幕寬度 (dp 為單位)
+    val density = LocalDensity.current.density // 螢幕密度 (dp 到 px 的轉換)
+
+    // 啟動 Coroutine 進行計時和圖示移動
+    LaunchedEffect(gameOver) {
+        // 如果遊戲尚未結束，開始計時和移動圖示
+        if (!gameOver) {
+            while (!gameOver) {
+                delay(1000) // 每秒鐘執行一次
+                if (!gameOver) {
+                    timeElapsed += 1 // 每秒鐘增加遊戲時間
+                    mariaPosition += 50f // 每秒鐘圖示向右移動
+
+                    // 當瑪利亞圖示完全移出螢幕右邊界，遊戲結束
+                    if (mariaPosition > (screenWidth * density)) { // 使用螢幕寬度進行判斷
+                        gameOver = true
+                    }
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -101,6 +145,28 @@ fun Start(m: Modifier) {
                     }
                 }
             }
+            // 檢測雙擊事件
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        val currentBackgroundColor = colors[currentIndex]
+                        if (currentBackgroundColor == colors[currentIndex]) {
+                            // 背景顏色相同，加1分，重新隨機產生瑪利亞圖示
+                            score += 1
+                            mariaImage = when (Random.nextInt(4)) {
+                                0 -> R.drawable.maria0
+                                1 -> R.drawable.maria1
+                                2 -> R.drawable.maria2
+                                else -> R.drawable.maria3
+                            }
+                            mariaPosition = 0f // 每次雙擊後，讓圖示從螢幕左邊開始移動
+                        } else {
+                            // 背景顏色不同，扣1分
+                            score -= 1
+                        }
+                    }
+                )
+            }
     ) {
         Column(
             modifier = Modifier
@@ -115,6 +181,7 @@ fun Start(m: Modifier) {
             )
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 顯示圖片，保持原來的大小和位置
             Image(
                 painter = painterResource(id = R.drawable.class_a), // 確保圖片存在於 res/drawable 目錄下
                 contentDescription = "Class Image",
@@ -125,18 +192,20 @@ fun Start(m: Modifier) {
             )
             Spacer(modifier = Modifier.height(16.dp))
 
+            // 顯示「遊戲持續時間」
             Text(
-                text = "遊戲持續時間 0 秒",
+                text = "遊戲持續時間 ${timeElapsed} 秒",
                 style = TextStyle(fontSize = 10.sp, color = Color.Black)
             )
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "您的成績 0 分",
+                text = "您的成績 $score 分",
                 style = TextStyle(fontSize = 10.sp, color = Color.Black)
             )
             Spacer(modifier = Modifier.height(32.dp))
 
+            // 結束遊戲的按鈕
             Button(
                 onClick = {
                     // 使用 LocalContext.current 並檢查是否為 Activity
@@ -144,13 +213,24 @@ fun Start(m: Modifier) {
                     activity?.finish() // 如果是 Activity，則結束它
                 },
                 modifier = Modifier
-                    .padding(top = 16.dp)
-                    .fillMaxWidth()
+                    .padding(top = 1.dp)
                     .height(50.dp),
                 shape = MaterialTheme.shapes.medium.copy(CornerSize(16.dp))
             ) {
                 Text(text = "結束App")
             }
+        }
+
+        // 瑪利亞圖示
+        if (!gameOver) {
+            Image(
+                painter = painterResource(id = mariaImage), // 使用隨機的瑪利亞圖示
+                contentDescription = "Maria",
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .offset(x = mariaPosition.dp, y = 0.dp)
+                    .size(200.dp)
+            )
         }
     }
 }
