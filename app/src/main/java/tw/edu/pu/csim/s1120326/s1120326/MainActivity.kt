@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,98 +75,62 @@ class MainActivity : ComponentActivity() {
 fun Start(m: Modifier) {
     val context = LocalContext.current
 
-    // 定義背景顏色列表
+    // 背景顏色
     val colors = listOf(
-        Color(0xff95fe95), // 顏色 1
-        Color(0xfffdca0f), // 顏色 2
-        Color(0xfffea4a4), // 顏色 3
-        Color(0xffa5dfed)  // 顏色 4
+        Color(0xff95fe95),
+        Color(0xfffdca0f),
+        Color(0xfffea4a4),
+        Color(0xffa5dfed)
     )
 
-    // 當前顏色索引
-    var currentIndex by remember { mutableStateOf(0) }
+    var currentIndex by remember { mutableStateOf(0) } // Box 的背景顏色索引
     var isSwiping by remember { mutableStateOf(false) }
+    var gameTime by remember { mutableStateOf(0) } // 遊戲持續時間
+    var mariaPosition by remember { mutableStateOf(0f) } // 瑪利亞水平位置
+    var mariaImageIndex by remember { mutableStateOf(0) } // 隨機生成瑪利亞圖片索引
+    var score by remember { mutableStateOf(0) } // 遊戲分數
+    var isGameOver by remember { mutableStateOf(false) } // 判斷遊戲是否結束
 
-    // 計時器
-    var timeElapsed by remember { mutableStateOf(0) }
-    var gameOver by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
-    // 瑪利亞圖示位置
-    var mariaPosition by remember { mutableStateOf(0f) }
-
-    // 隨機瑪利亞圖示
-    var mariaImage by remember { mutableStateOf(R.drawable.maria0) }
-
-    // 分數
-    var score by remember { mutableStateOf(0) }
-
-    // 獲取螢幕配置和密度
-    val configuration = LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp // 螢幕寬度 (dp 為單位)
-    val density = LocalDensity.current.density // 螢幕密度 (dp 到 px 的轉換)
-
-    // 啟動 Coroutine 進行計時和圖示移動
-    LaunchedEffect(gameOver) {
-        // 如果遊戲尚未結束，開始計時和移動圖示
-        if (!gameOver) {
-            while (!gameOver) {
-                delay(1000) // 每秒鐘執行一次
-                if (!gameOver) {
-                    timeElapsed += 1 // 每秒鐘增加遊戲時間
-                    mariaPosition += 50f // 每秒鐘圖示向右移動
-
-                    // 當瑪利亞圖示完全移出螢幕右邊界，遊戲結束
-                    if (mariaPosition > (screenWidth * density)) { // 使用螢幕寬度進行判斷
-                        gameOver = true
-                    }
-                }
+    // 啟動遊戲邏輯
+    LaunchedEffect(isGameOver) {
+        // 只有遊戲未結束時才更新時間和移動瑪利亞
+        if (!isGameOver) {
+            while (!isGameOver && mariaPosition < 1080f) { // 假設螢幕寬度為 1080 像素
+                gameTime += 1 // 每秒增加遊戲持續時間
+                delay(1000L) // 等待 1 秒
+                mariaPosition += 50f // 瑪利亞每秒向右移動
             }
         }
     }
 
+    // 當瑪利亞移出螢幕右側時，停止遊戲時間
+    if (mariaPosition >= 1080f) {
+        isGameOver = true
+    }
+
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors[currentIndex]) // 根據索引設置背景顏色
+            .background(colors[currentIndex])
             .pointerInput(Unit) {
                 detectHorizontalDragGestures { change, dragAmount ->
                     if (!isSwiping) {
                         isSwiping = true
-                        change.consume() // 消耗滑動事件
-                        if (dragAmount > 0) { // 右滑
+                        change.consume()
+                        if (dragAmount > 0) {
                             currentIndex = (currentIndex - 1 + colors.size) % colors.size
-                        } else if (dragAmount < 0) { // 左滑
+                        } else if (dragAmount < 0) {
                             currentIndex = (currentIndex + 1) % colors.size
                         }
-                        // 延遲一段時間，避免快速滑動
-                        kotlinx.coroutines.GlobalScope.launch {
-                            kotlinx.coroutines.delay(500) // 延遲500毫秒
+                        coroutineScope.launch {
+                            delay(500)
                             isSwiping = false
                         }
                     }
                 }
-            }
-            // 檢測雙擊事件
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onDoubleTap = {
-                        val currentBackgroundColor = colors[currentIndex]
-                        if (currentBackgroundColor == colors[currentIndex]) {
-                            // 背景顏色相同，加1分，重新隨機產生瑪利亞圖示
-                            score += 1
-                            mariaImage = when (Random.nextInt(4)) {
-                                0 -> R.drawable.maria0
-                                1 -> R.drawable.maria1
-                                2 -> R.drawable.maria2
-                                else -> R.drawable.maria3
-                            }
-                            mariaPosition = 0f // 每次雙擊後，讓圖示從螢幕左邊開始移動
-                        } else {
-                            // 背景顏色不同，扣1分
-                            score -= 1
-                        }
-                    }
-                )
             }
     ) {
         Column(
@@ -181,20 +146,18 @@ fun Start(m: Modifier) {
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 顯示圖片，保持原來的大小和位置
             Image(
-                painter = painterResource(id = R.drawable.class_a), // 確保圖片存在於 res/drawable 目錄下
+                painter = painterResource(id = R.drawable.class_a),
                 contentDescription = "Class Image",
                 modifier = Modifier
-                    .fillMaxWidth() // 讓圖片寬度填滿版面
-                    .wrapContentHeight(), // 根據圖片比例自動調整高度
-                contentScale = ContentScale.Fit // 確保圖片完整顯示，不裁剪
+                    .fillMaxWidth()
+                    .wrapContentHeight(),
+                contentScale = ContentScale.Fit
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 顯示「遊戲持續時間」
             Text(
-                text = "遊戲持續時間 ${timeElapsed} 秒",
+                text = "遊戲持續時間 $gameTime 秒",
                 style = TextStyle(fontSize = 10.sp, color = Color.Black)
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -205,12 +168,10 @@ fun Start(m: Modifier) {
             )
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 結束遊戲的按鈕
             Button(
                 onClick = {
-                    // 使用 LocalContext.current 並檢查是否為 Activity
                     val activity = context as? Activity
-                    activity?.finish() // 如果是 Activity，則結束它
+                    activity?.finish()
                 },
                 modifier = Modifier
                     .padding(top = 1.dp)
@@ -221,16 +182,35 @@ fun Start(m: Modifier) {
             }
         }
 
-        // 瑪利亞圖示
-        if (!gameOver) {
-            Image(
-                painter = painterResource(id = mariaImage), // 使用隨機的瑪利亞圖示
-                contentDescription = "Maria",
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .offset(x = mariaPosition.dp, y = 0.dp)
-                    .size(200.dp)
-            )
-        }
+        // 瑪利亞圖片
+        Image(
+            painter = painterResource(id = when (mariaImageIndex) {
+                0 -> R.drawable.maria0
+                1 -> R.drawable.maria1
+                2 -> R.drawable.maria2
+                else -> R.drawable.maria3
+            }), // 根據索引顯示不同圖片
+            contentDescription = "瑪利亞",
+            modifier = Modifier
+                .width(200.dp)
+                .height(200.dp)
+                .align(Alignment.BottomStart)
+                .offset(x = mariaPosition.dp, y = 0.dp)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            // 雙擊檢測
+                            if (currentIndex == mariaImageIndex) { // 背景顏色與圖片顏色索引相同
+                                score += 1
+                            } else {
+                                score -= 1
+                            }
+                            // 重置瑪利亞圖片
+                            mariaPosition = 0f
+                            mariaImageIndex = (0..3).random()
+                        }
+                    )
+                }
+        )
     }
 }
